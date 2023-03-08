@@ -482,19 +482,3 @@ func UniversalStatisticalTest(bits string) (float64, bool) {
 
 	return P_value, P_value > 0.01
 }
-
-/*
-func main() {
-	data := []int{33, 460, 340, 126, 468, 359, 348, 6, 376, 325, 52, 15, 307, 431, 389, 230, 32, 393, 461, 416, 302, 26, 422, 424, 217, 349, 463, 309, 100, 69, 266, 61, 214, 12, 396, 420, 366, 152, 93}
-
-	ndata := intsToBits(data)
-	fmt.Println(CumulativeSumsTest(ndata))
-	fmt.Println(MonobitTest(ndata))
-	fmt.Println(BlockFrequencyTest(ndata, 32))
-	fmt.Println(LongestRunOfOnesTest(ndata, 8))
-	fmt.Println(BinaryMatrixRankTest(ndata, 16, 16))
-	fmt.Println(RunsTest(ndata))
-	fmt.Println(SpectralTest(ndata))
-	fmt.Println(UniversalStatisticalTest(ndata))
-}
-*/
