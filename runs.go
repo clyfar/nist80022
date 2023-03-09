@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"github.com/clyfar/nist80022"
+	"nist80022/nist80022"
 )
 
 func main() {
