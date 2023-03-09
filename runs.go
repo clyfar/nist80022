@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"nist80022/nist80022"
+	"nist80022"
 )
 
 func main() {
