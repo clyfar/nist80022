@@ -1,4 +1,4 @@
-module github.com/clyfar/nist8022
+module github.com/clyfar/nist80022
 
 require gonum.org/v1/gonum v0.12.0
 
