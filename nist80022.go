@@ -2,11 +2,12 @@ package nist80022
 
 import (
 	"fmt"
-	"gonum.org/v1/gonum/mathext"
-	"gonum.org/v1/gonum/stat/distuv"
 	"math"
 	"strconv"
 	"strings"
+
+	"gonum.org/v1/gonum/mathext"
+	"gonum.org/v1/gonum/stat/distuv"
 )
 
 // countOnes returns the number of ones in a binary string
@@ -22,6 +23,9 @@ func countOnes(bits string) int {
 
 // average returns the average of a slice of floats
 func average(nums []float64) float64 {
+	if len(nums) == 0 {
+		return 0
+	}
 	sum := 0.0
 	for _, x := range nums {
 		sum += x
@@ -31,6 +35,9 @@ func average(nums []float64) float64 {
 
 // variance returns the variance of a slice of floats, given its average
 func variance(nums []float64, avg float64) float64 {
+	if len(nums) == 0 {
+		return 0
+	}
 	sum := 0.0
 	for _, x := range nums {
 		sum += (x - avg) * (x - avg)
