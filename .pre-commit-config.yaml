@@ -1,7 +1,11 @@
 repos:
-- repo: https://github.com/dnephin/pre-commit-golang
-  rev: v0.5.0
-  hooks:
-    - id: go-fmt
-    - id: go-lint
-    - id: go-unit-tests
+  - repo: local
+    hooks:
+      - id: test
+        name: test
+        entry: ./bin/test.sh
+        language: script
+      - id: lint
+        name: lint
+        entry: ./bin/lint_fmt.sh
+        language: script
