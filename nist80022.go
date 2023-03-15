@@ -45,7 +45,7 @@ func variance(nums []float64, avg float64) float64 {
 	return sum / float64(len(nums))
 }
 
-// intToBits is a function to convert integers to binary and concatonate the results
+// IntsToBits is a function to convert integers to binary and concatonate the results
 func IntsToBits(ints []int) string {
 	var bits strings.Builder
 	for _, i := range ints {
@@ -64,14 +64,14 @@ func chiSquared(counts []float64, expectedCounts []float64) float64 {
 	return chisq
 }
 
-// Implementation of the chi-squared cumulative distribution function
+// chiSquaredCDF is an implementation of the chi-squared cumulative distribution function
 func chiSquaredCDF(chisq float64, df int) float64 {
 	chiDist := distuv.ChiSquared{K: float64(df)}
 	pval := 1 - chiDist.CDF(chisq)
 	return pval
 }
 
-// Remove if not needed in the future
+// BinaryStringToIntSlice should be removed if not needed in the future
 func BinaryStringToIntSlice(str string) ([]int, error) {
 	intSlice := make([]int, len(str))
 	for i, char := range str {
@@ -86,6 +86,7 @@ func BinaryStringToIntSlice(str string) ([]int, error) {
 	return intSlice, nil
 }
 
+// getBlock returns a block of size len(s) starting at startIndex
 func getBlock(s string, startIndex int) string {
 	if startIndex+len(s) > len(s) {
 		return ""
@@ -93,6 +94,7 @@ func getBlock(s string, startIndex int) string {
 	return s[startIndex : startIndex+len(s)]
 }
 
+// toBlock converts an integer to a binary string of size bits
 func toBlock(num int, size int) string {
 	if size == 0 {
 		return ""
@@ -103,6 +105,7 @@ func toBlock(num int, size int) string {
 	return toBlock(num/2, size-1) + "1"
 }
 
+// toIndex converts a binary string to an integer
 func toIndex(bit string) int {
 	if bit == "" {
 		return 0
@@ -200,7 +203,7 @@ func calculateMatrixRank(matrix [][]int, m, q int) int {
 	return rank
 }
 
-// The NIST cumulative sums test is a statistical test to determine if the number of ones and zeros in a binary sequence are evenly distributed.
+// CumulativeSumsTest or the NIST cumulative sums test is a statistical test to determine if the number of ones and zeros in a binary sequence are evenly distributed.
 // The test involves calculating the cumulative sums of the deviations between the observed counts of ones and zeros and the expected counts.
 // If the sequence passes the test, then it is considered to be statistically random.
 func CumulativeSumsTest(bits string) (float64, bool) {
@@ -329,36 +332,36 @@ func BlockFrequencyTest(bits string, blocksize int) (float64, bool) {
 //
 // bits: the input bit string to test.
 func RunsTest(bits string) (float64, bool) {
-	m_seq := []byte(bits)
+	mSeq := []byte(bits)
 
-	m_numOnes := 0
-	for _, bit := range m_seq {
+	mNumOnes := 0
+	for _, bit := range mSeq {
 		if bit == '1' {
-			m_numOnes++
+			mNumOnes++
 		}
 	}
-	pi := float64(m_numOnes) / float64(len(m_seq))
+	pi := float64(mNumOnes) / float64(len(mSeq))
 
-	if math.Abs(pi-0.5) >= 2/math.Sqrt(float64(len(m_seq))) {
+	if math.Abs(pi-0.5) >= 2/math.Sqrt(float64(len(mSeq))) {
 		return 0.0, false
 	}
 
-	V_n := 0
-	for i := 0; i < len(m_seq)-1; i++ {
-		if m_seq[i] != m_seq[i+1] {
-			V_n++
+	Vn := 0
+	for i := 0; i < len(mSeq)-1; i++ {
+		if mSeq[i] != mSeq[i+1] {
+			Vn++
 		}
 	}
-	V_n++
+	Vn++
 
-	numerator := math.Abs(float64(V_n) - 2*float64(len(m_seq))*pi*(1-pi))
-	denominator := 2 * math.Sqrt(2*float64(len(m_seq))) * pi * (1 - pi)
+	numerator := math.Abs(float64(Vn) - 2*float64(len(mSeq))*pi*(1-pi))
+	denominator := 2 * math.Sqrt(2*float64(len(mSeq))) * pi * (1 - pi)
 	if denominator == 0 {
 		return 0.0, false
 	}
-	P_value := math.Erfc(numerator / denominator / math.Sqrt2)
+	pval := math.Erfc(numerator / denominator / math.Sqrt2)
 
-	return P_value, P_value > 0.01
+	return pval, pval > 0.01
 }
 
 // LongestRunOfOnesTest performs the longest run of ones in a block test on the input sequence.
@@ -382,6 +385,7 @@ func LongestRunOfOnesTest(bits string, blocksize int) (float64, bool) {
 	return score, pass
 }
 
+// countLongestRuns counts the longest run of ones in the input bit string.
 func countLongestRuns(bits string) int {
 	numOnes := 0
 	longestRun := 0
@@ -422,8 +426,7 @@ func SpectralTest(bits string) (float64, bool) {
 		return 0.0, false
 	}
 
-	var s []float64
-	s = make([]float64, m)
+	var s []float64 = make([]float64, m)
 	for i := 0; i < m; i++ {
 		s[i] = 0.0
 		for j := 0; j < n-i; j++ {
@@ -440,10 +443,9 @@ func SpectralTest(bits string) (float64, bool) {
 	}
 	tau = 2.0 * tau
 
-	var P_value float64
-	P_value = math.Erfc(math.Abs(tau) / math.Sqrt(2.0))
+	var pval float64 = math.Erfc(math.Abs(tau) / math.Sqrt(2.0))
 
-	return P_value, P_value > 0.01
+	return pval, pval > 0.01
 }
 
 // UniversalStatisticalTest performs Maurer's "universal statistical" test on the input sequence.
@@ -484,8 +486,7 @@ func UniversalStatisticalTest(bits string) (float64, bool) {
 		chiSquared += chiSum
 	}
 
-	var P_value float64
-	P_value = math.Erfc(math.Sqrt(chiSquared / (float64(L) * float64(Q) * (math.Pow(2.0, float64(L)) - float64(L) - 1.0) / (2.0 * float64(L) * float64(L)))))
+	var pval float64 = math.Erfc(math.Sqrt(chiSquared / (float64(L) * float64(Q) * (math.Pow(2.0, float64(L)) - float64(L) - 1.0) / (2.0 * float64(L) * float64(L)))))
 
-	return P_value, P_value > 0.01
+	return pval, pval > 0.01
 }
