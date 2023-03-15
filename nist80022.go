@@ -359,9 +359,9 @@ func RunsTest(bits string) (float64, bool) {
 	if denominator == 0 {
 		return 0.0, false
 	}
-	PValue := math.Erfc(numerator / denominator / math.Sqrt2)
+	pval := math.Erfc(numerator / denominator / math.Sqrt2)
 
-	return PValue, PValue > 0.01
+	return pval, pval > 0.01
 }
 
 // LongestRunOfOnesTest performs the longest run of ones in a block test on the input sequence.
@@ -443,9 +443,9 @@ func SpectralTest(bits string) (float64, bool) {
 	}
 	tau = 2.0 * tau
 
-	var PValue float64 = math.Erfc(math.Abs(tau) / math.Sqrt(2.0))
+	var pval float64 = math.Erfc(math.Abs(tau) / math.Sqrt(2.0))
 
-	return PValue, PValue > 0.01
+	return pval, pval > 0.01
 }
 
 // UniversalStatisticalTest performs Maurer's "universal statistical" test on the input sequence.
@@ -486,7 +486,7 @@ func UniversalStatisticalTest(bits string) (float64, bool) {
 		chiSquared += chiSum
 	}
 
-	var PValue float64 = math.Erfc(math.Sqrt(chiSquared / (float64(L) * float64(Q) * (math.Pow(2.0, float64(L)) - float64(L) - 1.0) / (2.0 * float64(L) * float64(L)))))
+	var pval float64 = math.Erfc(math.Sqrt(chiSquared / (float64(L) * float64(Q) * (math.Pow(2.0, float64(L)) - float64(L) - 1.0) / (2.0 * float64(L) * float64(L)))))
 
-	return PValue, PValue > 0.01
+	return pval, pval > 0.01
 }
