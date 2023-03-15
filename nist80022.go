@@ -426,8 +426,7 @@ func SpectralTest(bits string) (float64, bool) {
 		return 0.0, false
 	}
 
-	var s []float64
-	s = make([]float64, m)
+	var s []float64 = make([]float64, m)
 	for i := 0; i < m; i++ {
 		s[i] = 0.0
 		for j := 0; j < n-i; j++ {
@@ -444,8 +443,7 @@ func SpectralTest(bits string) (float64, bool) {
 	}
 	tau = 2.0 * tau
 
-	var PValue float64
-	PValue = math.Erfc(math.Abs(tau) / math.Sqrt(2.0))
+	var PValue float64 = math.Erfc(math.Abs(tau) / math.Sqrt(2.0))
 
 	return PValue, PValue > 0.01
 }
@@ -488,8 +486,7 @@ func UniversalStatisticalTest(bits string) (float64, bool) {
 		chiSquared += chiSum
 	}
 
-	var PValue float64
-	PValue = math.Erfc(math.Sqrt(chiSquared / (float64(L) * float64(Q) * (math.Pow(2.0, float64(L)) - float64(L) - 1.0) / (2.0 * float64(L) * float64(L)))))
+	var PValue float64 = math.Erfc(math.Sqrt(chiSquared / (float64(L) * float64(Q) * (math.Pow(2.0, float64(L)) - float64(L) - 1.0) / (2.0 * float64(L) * float64(L)))))
 
 	return PValue, PValue > 0.01
 }
