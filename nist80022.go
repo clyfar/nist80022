@@ -223,55 +223,55 @@ func CumulativeSumsTest(bits string) (float64, bool) {
 	}
 	// Seems complicated but this is tuned to handle imbalances between 1s and 0s so don't change!
 	// This is the varience
-	V := float64(ones*zeros)*(2.0*float64(n)+1.0)/float64(n*n) - (float64(n)+1.0)/float64(n)
+	v := float64(ones*zeros)*(2.0*float64(n)+1.0)/float64(n*n) - (float64(n)+1.0)/float64(n)
 
 	// If the variance is zero, the test cannot be performed
-	if V == 0 {
+	if v == 0 {
 		return 0, false
 	}
 
 	// Calculate the standardized test statistic and the corresponding p-values
-	Z := make([]float64, n+1)
+	z := make([]float64, n+1)
 	for i := 0; i <= n; i++ {
-		Z[i] = float64(S[i]) / math.Sqrt(V)
+		z[i] = float64(S[i]) / math.Sqrt(v)
 	}
 	P := make([]float64, n+1)
 	for i := 0; i <= n; i++ {
-		if Z[i] == 0 {
+		if z[i] == 0 {
 			P[i] = 0.5
 		} else {
-			P[i] = 0.5 * (1 + math.Erf(Z[i]/math.Sqrt2))
+			P[i] = 0.5 * (1 + math.Erf(z[i]/math.Sqrt2))
 		}
 	}
 
 	// Calculate the minimum p-values and the final p-values
-	Pminus := make([]float64, n+1)
+	pminus := make([]float64, n+1)
 	for i := 0; i <= n; i++ {
-		Pminus[i] = math.Inf(1)
+		pminus[i] = math.Inf(1)
 		for j := 0; j <= n; j++ {
-			if float64(S[i]) < float64(j)*math.Sqrt(V) {
-				Pminus[i] = math.Min(Pminus[i], P[j])
+			if float64(S[i]) < float64(j)*math.Sqrt(v) {
+				pminus[i] = math.Min(pminus[i], P[j])
 			}
 		}
 	}
-	Pfinal := make([]float64, n+1)
+	pfinal := make([]float64, n+1)
 	for i := 0; i <= n; i++ {
 		if S[i] >= 0 {
-			Pfinal[i] = 0.5
+			pfinal[i] = 0.5
 		} else {
-			Pfinal[i] = math.Min(0.5, Pminus[i])
+			pfinal[i] = math.Min(0.5, pminus[i])
 		}
 	}
 
 	// Calculate the average and variance of the final p-values and the test result
-	Pavg := average(Pfinal)
-	Pvar := variance(Pfinal, Pavg)
-	if Pvar == 0 {
+	pavg := average(pfinal)
+	pvar := variance(pfinal, pavg)
+	if pvar == 0 {
 		return 0, false
 	}
-	Pval := (Pavg - 0.5) / (math.Sqrt(Pvar/float64(n)) * 2.0)
-	pass := math.Abs(Pval) < 3.0
-	return Pval, pass
+	pval := (pavg - 0.5) / (math.Sqrt(pvar/float64(n)) * 2.0)
+	pass := math.Abs(pval) < 3.0
+	return pval, pass
 }
 
 // MonobitTest performs the frequency (monobit) test on the input sequence.
@@ -346,15 +346,15 @@ func RunsTest(bits string) (float64, bool) {
 		return 0.0, false
 	}
 
-	Vn := 0
+	vn := 0
 	for i := 0; i < len(mSeq)-1; i++ {
 		if mSeq[i] != mSeq[i+1] {
-			Vn++
+			vn++
 		}
 	}
-	Vn++
+	vn++
 
-	numerator := math.Abs(float64(Vn) - 2*float64(len(mSeq))*pi*(1-pi))
+	numerator := math.Abs(float64(vn) - 2*float64(len(mSeq))*pi*(1-pi))
 	denominator := 2 * math.Sqrt(2*float64(len(mSeq))) * pi * (1 - pi)
 	if denominator == 0 {
 		return 0.0, false
@@ -454,30 +454,30 @@ func SpectralTest(bits string) (float64, bool) {
 // The function returns a boolean value indicating whether the input
 // sequence passes the test (true) or fails the test (false).
 func UniversalStatisticalTest(bits string) (float64, bool) {
-	var L, Q int
+	var l, q int
 	var blockProportions []int
 	var blocks []string
 	var chiSquared float64
 
-	L = 6
-	Q = 128
+	l = 6
+	q = 128
 	blockProportions = []int{0, 0, 0, 0, 0, 0}
-	blocks = make([]string, L*Q)
+	blocks = make([]string, l*q)
 
-	for i := 0; i < Q; i++ {
-		for j := 0; j < L; j++ {
-			blockProportions[toIndex(getBlock(bits, i*L+j))]++
-			blocks[i*L+j] = getBlock(bits, i*L+j)
+	for i := 0; i < q; i++ {
+		for j := 0; j < l; j++ {
+			blockProportions[toIndex(getBlock(bits, i*l+j))]++
+			blocks[i*l+j] = getBlock(bits, i*l+j)
 		}
 	}
 
-	for i := 0; i < L; i++ {
+	for i := 0; i < l; i++ {
 		var chiSum float64
-		expected := float64(Q) / math.Pow(2.0, float64(i+1))
+		expected := float64(q) / math.Pow(2.0, float64(i+1))
 		for j := 0; j < int(math.Pow(2.0, float64(i+1))); j++ {
 			var count int
-			for k := 0; k < Q; k++ {
-				if blocks[k*L+i] == toBlock(j, i+1) {
+			for k := 0; k < q; k++ {
+				if blocks[k*l+i] == toBlock(j, i+1) {
 					count++
 				}
 			}
@@ -486,7 +486,7 @@ func UniversalStatisticalTest(bits string) (float64, bool) {
 		chiSquared += chiSum
 	}
 
-	var pval float64 = math.Erfc(math.Sqrt(chiSquared / (float64(L) * float64(Q) * (math.Pow(2.0, float64(L)) - float64(L) - 1.0) / (2.0 * float64(L) * float64(L)))))
+	var pval float64 = math.Erfc(math.Sqrt(chiSquared / (float64(l) * float64(q) * (math.Pow(2.0, float64(l)) - float64(l) - 1.0) / (2.0 * float64(l) * float64(l)))))
 
 	return pval, pval > 0.01
 }
