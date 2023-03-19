@@ -331,3 +331,137 @@ func TestGetBlock(t *testing.T) {
 		})
 	}
 }
+
+func TestToBlock(t *testing.T) {
+	type test struct {
+		name string
+		num  int
+		size int
+		want string
+	}
+
+	tests := []test{
+		{
+			name: "0 num",
+			num:  0,
+			size: 4,
+			want: "0000",
+		},
+		{
+			name: "0 size",
+			num:  1,
+			size: 0,
+			want: "",
+		},
+		{
+			name: "numbers",
+			num:  5,
+			size: 4,
+			want: "0101",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := toBlock(tc.num, tc.size)
+			if got != tc.want {
+				t.Errorf("toBlock(%d, %d) = %s, want %s", tc.num, tc.size, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestToIndex(t *testing.T) {
+	type test struct {
+		name string
+		str  string
+		want int
+	}
+
+	tests := []test{
+		{
+			name: "Empty input",
+			str:  "",
+			want: 0,
+		},
+		{
+			name: "Single character input",
+			str:  "1",
+			want: 1,
+		},
+		{
+			name: "Multiple character input",
+			str:  "110",
+			want: 6,
+		},
+		{
+			name: "Has more than 31 bit characters",
+			str:  "111111111111111111111111111111111111111111111111111111111111111111111111111111111",
+			want: 0,
+		},
+		{
+			name: "Has non-binary characters",
+			str:  "123",
+			want: 0,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := toIndex(tc.str)
+			if got != tc.want {
+				t.Errorf("toIndex(%s) = %d, want %d", tc.str, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestBinaryMatrixRankTest(t *testing.T) {
+	type test struct {
+		name    string
+		bits    string
+		m       int
+		q       int
+		outVal  float64
+		outBool bool
+	}
+
+	tests := []test{
+		{
+			name:    "Empty input",
+			bits:    "",
+			m:       0,
+			q:       0,
+			outVal:  0.0,
+			outBool: false,
+		},
+		{
+			name:    "Zero int inputs",
+			bits:    "1",
+			m:       0,
+			q:       0,
+			outVal:  0.0,
+			outBool: false,
+		},
+		{
+			name:    "Bits less than m",
+			bits:    "1",
+			m:       2,
+			q:       2,
+			outVal:  0.0,
+			outBool: false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			val, bool := BinaryMatrixRankTest(tc.bits, tc.m, tc.q)
+			if val != tc.outVal {
+				t.Errorf("BinaryMatrixRankTest(%s, %d, %d) = %f, want %f", tc.bits, tc.m, tc.q, val, tc.outVal)
+			}
+			if bool != tc.outBool {
+				t.Errorf("BinaryMatrixRankTest(%s, %d, %d) = %t, want %t", tc.bits, tc.m, tc.q, bool, tc.outBool)
+			}
+		})
+	}
+}

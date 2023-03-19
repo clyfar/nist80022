@@ -134,8 +134,14 @@ func toIndex(bit string) int {
 // bits: the input bit string to test.
 // m: the number of rows in each matrix.
 // q: the number of columns in each matrix.
-func BinaryMatrixRankTest(bits string, m, q int) (float64, bool) {
+func BinaryMatrixRankTest(bits string, m int, q int) (float64, bool) {
+	if bits == "" || m <= 0 || q <= 0 {
+		return 0, false
+	}
 	n := len(bits)
+	if n < m {
+		return 0, false
+	}
 	numRows := n / m
 	numMatrices := n / (m * q)
 	var rankSum float64
