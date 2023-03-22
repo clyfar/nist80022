@@ -6,7 +6,6 @@ import (
 	"strconv"
 	"strings"
 
-	"gonum.org/v1/gonum/mathext"
 	"gonum.org/v1/gonum/stat/distuv"
 )
 
@@ -124,6 +123,47 @@ func toIndex(bit string) int {
 	return index
 }
 
+type BitArray struct {
+	data []byte
+	size int
+}
+
+func NewBitArray(size int) *BitArray {
+	return &BitArray{
+		data: make([]byte, (size+7)>>3),
+	}
+}
+
+func (b *BitArray) Set(index int, value bool) {
+	if value {
+		b.data[index>>3] |= 1 << (index & 7)
+	} else {
+		b.data[index>>3] &^= 1 << (index & 7)
+	}
+}
+
+func (b *BitArray) Get(index int) bool {
+	return (b.data[index>>3] & (1 << (index & 7))) != 0
+}
+
+func (b *BitArray) Size() int {
+	return len(b.data) << 3
+}
+
+func IntArrayToBitArray(intArray []int) *BitArray {
+	n := len(intArray) * 8
+	bitArray := NewBitArray(n)
+
+	for i, value := range intArray {
+		for j := 0; j < 8; j++ {
+			bit := (value >> (7 - j)) & 1
+			bitArray.Set(i*8+j, bit == 1)
+		}
+	}
+
+	return bitArray
+}
+
 // BinaryMatrixRankTest performs the binary matrix rank test on the input
 // bit string. The test divides the bit string into m x q binary matrices,
 // and calculates the rank of each matrix. It then calculates the chi-squared
@@ -206,72 +246,32 @@ func calculateMatrixRank(matrix [][]int, m, q int) int {
 // CumulativeSumsTest or the NIST cumulative sums test is a statistical test to determine if the number of ones and zeros in a binary sequence are evenly distributed.
 // The test involves calculating the cumulative sums of the deviations between the observed counts of ones and zeros and the expected counts.
 // If the sequence passes the test, then it is considered to be statistically random.
-func CumulativeSumsTest(bits string) (float64, bool) {
-	// Count the number of ones and zeros in the string
-	n := len(bits)
-	ones := countOnes(bits)
-	zeros := n - ones
+func CumulativeSumsTest(data *BitArray) (float64, bool) {
+	n := data.Size()
+
+	if n < 100 {
+		return -1.0, false
+	}
+
 	S := make([]int, n+1)
-
-	// Calculate the cumulative sum of the bits and the variance of the sum
-	for i, b := range bits {
-		if b == '0' {
-			S[i+1] = S[i] - 1
+	S[0] = 0
+	for i := 1; i <= n; i++ {
+		if data.Get(i - 1) {
+			S[i] = S[i-1] + 1
 		} else {
-			S[i+1] = S[i] + 1
-		}
-	}
-	// Seems complicated but this is tuned to handle imbalances between 1s and 0s so don't change!
-	// This is the varience
-	v := float64(ones*zeros)*(2.0*float64(n)+1.0)/float64(n*n) - (float64(n)+1.0)/float64(n)
-
-	// If the variance is zero, the test cannot be performed
-	if v == 0 {
-		return 0, false
-	}
-
-	// Calculate the standardized test statistic and the corresponding p-values
-	z := make([]float64, n+1)
-	for i := 0; i <= n; i++ {
-		z[i] = float64(S[i]) / math.Sqrt(v)
-	}
-	P := make([]float64, n+1)
-	for i := 0; i <= n; i++ {
-		if z[i] == 0 {
-			P[i] = 0.5
-		} else {
-			P[i] = 0.5 * (1 + math.Erf(z[i]/math.Sqrt2))
+			S[i] = S[i-1] - 1
 		}
 	}
 
-	// Calculate the minimum p-values and the final p-values
-	pminus := make([]float64, n+1)
-	for i := 0; i <= n; i++ {
-		pminus[i] = math.Inf(1)
-		for j := 0; j <= n; j++ {
-			if float64(S[i]) < float64(j)*math.Sqrt(v) {
-				pminus[i] = math.Min(pminus[i], P[j])
-			}
-		}
-	}
-	pfinal := make([]float64, n+1)
-	for i := 0; i <= n; i++ {
-		if S[i] >= 0 {
-			pfinal[i] = 0.5
-		} else {
-			pfinal[i] = math.Min(0.5, pminus[i])
-		}
-	}
+	zForward := math.Abs(float64(S[n])) / math.Sqrt(float64(n))
+	zBackward := math.Abs(float64(S[0])) / math.Sqrt(float64(n))
 
-	// Calculate the average and variance of the final p-values and the test result
-	pavg := average(pfinal)
-	pvar := variance(pfinal, pavg)
-	if pvar == 0 {
-		return 0, false
-	}
-	pval := (pavg - 0.5) / (math.Sqrt(pvar/float64(n)) * 2.0)
-	pass := math.Abs(pval) < 3.0
-	return pval, pass
+	pValueForward := 1.0 - math.Erf(zForward/(math.Sqrt(2.0)*math.Sqrt(2.0)))
+	pValueBackward := 1.0 - math.Erf(zBackward/(math.Sqrt(2.0)*math.Sqrt(2.0)))
+
+	alpha := 0.001
+
+	return pValueForward, pValueForward > alpha && pValueBackward > alpha
 }
 
 // MonobitTest performs the frequency (monobit) test on the input sequence.
@@ -329,89 +329,109 @@ func BlockFrequencyTest(bits string, blocksize int) (float64, bool) {
 // randomness. It then computes the z-score of the observed run count, and
 // computes the corresponding p-value from the standard normal distribution.
 // The function returns the negative base 10 logarithm of the p-value as the score.
-//
-// bits: the input bit string to test.
-func RunsTest(bits string) (float64, bool) {
-	mSeq := []byte(bits)
+func RunsTest(data *BitArray) (float64, bool) {
+	n := data.Size()
 
-	mNumOnes := 0
-	for _, bit := range mSeq {
-		if bit == '1' {
-			mNumOnes++
+	if n < 100 {
+		return -1.0, false
+	}
+
+	var n1, n2, runs int
+	for i := 0; i < n; i++ {
+		if data.Get(i) {
+			n1++
+		} else {
+			n2++
+		}
+		if i == 0 || data.Get(i) != data.Get(i-1) {
+			runs++
 		}
 	}
-	pi := float64(mNumOnes) / float64(len(mSeq))
 
-	if math.Abs(pi-0.5) >= 2/math.Sqrt(float64(len(mSeq))) {
+	p := float64(n1) / float64(n)
+	q := float64(n2) / float64(n)
+	tau := 2.0 / math.Sqrt(float64(n))
+
+	if math.Abs(p-q) >= tau {
 		return 0.0, false
 	}
 
-	vn := 0
-	for i := 0; i < len(mSeq)-1; i++ {
-		if mSeq[i] != mSeq[i+1] {
-			vn++
-		}
-	}
-	vn++
+	expectedRuns := 2.0*float64(n1)*float64(n2)/float64(n) + 1.0
+	varianceRuns := 2.0 * float64(n1) * float64(n2) * (2.0*float64(n1)*float64(n2) - float64(n)) / (math.Pow(float64(n), 2.0) * (float64(n) - 1.0))
 
-	numerator := math.Abs(float64(vn) - 2*float64(len(mSeq))*pi*(1-pi))
-	denominator := 2 * math.Sqrt(2*float64(len(mSeq))) * pi * (1 - pi)
-	if denominator == 0 {
-		return 0.0, false
-	}
-	pval := math.Erfc(numerator / denominator / math.Sqrt2)
+	z := float64(float64(runs)-expectedRuns) / math.Sqrt(varianceRuns)
+	pValue := math.Erfc(math.Abs(z) / math.Sqrt(2.0))
+	alpha := 0.001
 
-	return pval, pval > 0.01
+	return pValue, pValue > alpha
 }
 
 // LongestRunOfOnesTest performs the longest run of ones in a block test on the input sequence.
 // The function returns a boolean value indicating whether the input
 // sequence passes the test (true) or fails the test (false).
-func LongestRunOfOnesTest(bits string, blocksize int) (float64, bool) {
-	n := len(bits)
-	numBlocks := n / blocksize
-	expectedRuns := float64(blocksize) / 2.0
-	chiSq := 0.0
-	for i := 0; i < numBlocks; i++ {
-		blockStart := i * blocksize
-		blockEnd := (i + 1) * blocksize
-		blockBits := bits[blockStart:blockEnd]
-		runs := countLongestRuns(blockBits)
-		chiSq += math.Pow(float64(runs)-expectedRuns, 2) / expectedRuns
+func LongestRunOfOnesTest(data *BitArray) (float64, bool) {
+	n := data.Size()
+	if n < 128 {
+		return -1.0, false
 	}
-	pval := 1 - mathext.GammaIncReg(float64(numBlocks)/2, chiSq/2)
-	score := -math.Log10(pval)
-	pass := score >= 2
-	return score, pass
-}
 
-// countLongestRuns counts the longest run of ones in the input bit string.
-func countLongestRuns(bits string) int {
-	numOnes := 0
-	longestRun := 0
-	currentRun := 0
-	for _, bit := range bits {
-		if bit == '1' {
-			numOnes++
-			currentRun++
-			if currentRun > longestRun {
-				longestRun = currentRun
+	blockLength := 0
+	if n < 6272 {
+		blockLength = 8
+	} else if n < 750000 {
+		blockLength = 128
+	} else {
+		blockLength = 10000
+	}
+
+	numBlocks := int(math.Floor(float64(n) / float64(blockLength)))
+
+	// Count the frequencies of runs of ones of various lengths
+	nu := make([]int, 6)
+	for i := 0; i < numBlocks; i++ {
+		runLength := 0
+		maxRunLength := 0
+		for j := 0; j < blockLength; j++ {
+			bit := data.Get(i*blockLength + j)
+			if bit {
+				runLength++
+			} else {
+				if runLength > 0 {
+					if runLength > maxRunLength {
+						maxRunLength = runLength
+					}
+					runLength = 0
+				}
 			}
+		}
+
+		if maxRunLength <= 1 {
+			nu[0]++
+		} else if maxRunLength == 2 {
+			nu[1]++
+		} else if maxRunLength == 3 {
+			nu[2]++
+		} else if maxRunLength == 4 {
+			nu[3]++
+		} else if maxRunLength == 5 {
+			nu[4]++
 		} else {
-			currentRun = 0
+			nu[5]++
 		}
 	}
-	if longestRun < 6 {
-		return 0
-	} else if longestRun == 6 {
-		return 1
-	} else if longestRun == 7 {
-		return 2
-	} else if longestRun == 8 {
-		return 3
-	} else {
-		return 4 + (longestRun - 9)
+
+	// Calculate the test statistic chiSquared
+	chiSquared := 0.0
+	piValues := []float64{0.2148, 0.3672, 0.2305, 0.1250, 0.0463, 0.0160}
+	for i := 0; i < 6; i++ {
+		chiSquared += math.Pow(float64(nu[i])-float64(numBlocks)*piValues[i], 2) / (float64(numBlocks) * piValues[i])
 	}
+
+	// Calculate the P-value
+	pValue := math.Exp(-chiSquared / 2)
+	alpha := 0.001
+
+	return pValue, pValue > alpha
 }
 
 // SpectralTest performs the spectral test on the input sequence.
@@ -453,40 +473,121 @@ func SpectralTest(bits string) (float64, bool) {
 // represents the value of a bit (either 0 or 1).
 // The function returns a boolean value indicating whether the input
 // sequence passes the test (true) or fails the test (false).
-func UniversalStatisticalTest(bits string) (float64, bool) {
-	var l, q int
-	var blockProportions []int
-	var blocks []string
-	var chiSquared float64
+func UniversalStatisticalTest(data *BitArray) (float64, bool) {
+	n := data.Size()
+	fmt.Println(n)
+	if n < 1000 {
+		return -1.0, false
+	}
 
-	l = 6
-	q = 128
-	blockProportions = []int{0, 0, 0, 0, 0, 0}
-	blocks = make([]string, l*q)
+	var L, Q, K int
+	if n >= 1010 && n < 3864 {
+		L, Q, K = 3, 10, 64
+	} else if n >= 3864 && n < 904964 {
+		L, Q, K = 5, 10, 1024
+	} else {
+		L, Q, K = 6, 10, 4096
+	}
 
-	for i := 0; i < q; i++ {
-		for j := 0; j < l; j++ {
-			blockProportions[toIndex(getBlock(bits, i*l+j))]++
-			blocks[i*l+j] = getBlock(bits, i*l+j)
+	T := make([]int, n)
+	for i := 1; i < n; i++ {
+		if data.Get(i - 1) {
+			T[i] = 1 + T[i-1]
+		} else {
+			T[i] = T[i-1]
 		}
 	}
 
-	for i := 0; i < l; i++ {
-		var chiSum float64
-		expected := float64(q) / math.Pow(2.0, float64(i+1))
-		for j := 0; j < int(math.Pow(2.0, float64(i+1))); j++ {
-			var count int
-			for k := 0; k < q; k++ {
-				if blocks[k*l+i] == toBlock(j, i+1) {
-					count++
-				}
+	initTable := make([]int, K)
+	for i := 0; i < K; i++ {
+		initTable[i] = 0
+	}
+	for i := n - 1; i >= n-Q*(1<<L); i-- {
+		index := (1 << L) - 1 - T[i]
+		if index >= 0 && index < K {
+			initTable[index]++
+		}
+	}
+
+	sum := 0.0
+	for i := 0; i < K; i++ {
+		p := float64(initTable[i]) / float64(Q)
+		if p > 0.0 {
+			sum += p * math.Log2(p)
+		}
+	}
+	phi := -sum
+
+	c := 0.7 - 0.8/float64(L) + (4+32/float64(L))*math.Pow(float64(n), -3.0/float64(L))/15
+	v := c * math.Sqrt(math.Pow(2.0, float64(L)-1)*float64(K)/float64(Q))
+	delta := phi - c*float64(K) + v
+
+	pValue := math.Erfc(math.Abs(delta) / (math.Sqrt(2.0) * v))
+	alpha := 0.001
+
+	return pValue, pValue > alpha
+}
+
+func ApproximateEntropyTest(data *BitArray, blockSize int) (float64, bool) {
+	n := data.Size()
+	if n < blockSize {
+		return -1.0, false
+	}
+	m := 10 // Block length (m = 10 for n >= 1000)
+	r := 0.5
+
+	// Function to get the m-bit block as a string
+	getBlockAsString := func(data *BitArray, start, length int) string {
+		block := ""
+		for i := 0; i < length; i++ {
+			if data.Get(start + i) {
+				block += "1"
+			} else {
+				block += "0"
 			}
-			chiSum += math.Pow(float64(count)-expected, 2.0) / expected
 		}
-		chiSquared += chiSum
+		return block
 	}
 
-	var pval float64 = math.Erfc(math.Sqrt(chiSquared / (float64(l) * float64(q) * (math.Pow(2.0, float64(l)) - float64(l) - 1.0) / (2.0 * float64(l) * float64(l)))))
+	// Count the occurrences of each m-bit block
+	counts := make(map[string]int)
+	for i := 0; i < n-m+1; i++ {
+		block := getBlockAsString(data, i, m)
+		counts[block]++
+	}
 
-	return pval, pval > 0.01
+	// Calculate the sum of the frequencies
+	sum := 0.0
+	for _, count := range counts {
+		sum += float64(count) * math.Log(float64(count)/float64(n-m+1))
+	}
+
+	// Calculate the approximate entropy (phi_m)
+	phiM := sum / float64(n-m+1)
+
+	// Count the occurrences of each (m+1)-bit block
+	countsMPlus1 := make(map[string]int)
+	for i := 0; i < n-m; i++ {
+		block := getBlockAsString(data, i, m+1)
+		countsMPlus1[block]++
+	}
+
+	// Calculate the sum of the frequencies for (m+1)-bit blocks
+	sumMPlus1 := 0.0
+	for _, count := range countsMPlus1 {
+		sumMPlus1 += float64(count) * math.Log(float64(count)/float64(n-m))
+	}
+
+	// Calculate the approximate entropy (phi_m+1)
+	phiMPlus1 := sumMPlus1 / float64(n-m)
+
+	// Calculate the test statistic
+	apEn := phiM - phiMPlus1
+
+	// Calculate the P-value
+	pValue := math.Erfc(math.Abs(apEn) / (math.Sqrt(2.0) * r * math.Sqrt(float64(n-m+1))))
+
+	alpha := 0.001
+
+	return pValue, pValue > alpha
 }
