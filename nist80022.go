@@ -93,39 +93,8 @@ func getBlock(s string, startIndex int) string {
 	return s[startIndex : startIndex+len(s)]
 }
 
-// toBlock converts an integer to a binary string of size bits
-func toBlock(num int, size int) string {
-	if size == 0 {
-		return ""
-	}
-	if num%2 == 0 {
-		return toBlock(num/2, size-1) + "0"
-	}
-	return toBlock(num/2, size-1) + "1"
-}
-
-// toIndex converts a binary string to an integer
-func toIndex(bit string) int {
-	if bit == "" {
-		return 0
-	}
-	n := len(bit)
-	if n > 31 {
-		return 0
-	}
-	var index int
-	for i := 0; i < n; i++ {
-		if bit[i] != '0' && bit[i] != '1' {
-			return 0
-		}
-		index = (index << 1) | int(bit[i]-'0')
-	}
-	return index
-}
-
 type BitArray struct {
 	data []byte
-	size int
 }
 
 func NewBitArray(size int) *BitArray {
