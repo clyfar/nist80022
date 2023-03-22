@@ -93,40 +93,47 @@ func getBlock(s string, startIndex int) string {
 	return s[startIndex : startIndex+len(s)]
 }
 
+// BitArray is a structure representing an array of bits.
 type BitArray struct {
-	data []byte
+	data []byte // data holds the actual bytes storing the bits.
 }
 
+// NewBitArray initializes and returns a new BitArray of the specified size.
 func NewBitArray(size int) *BitArray {
 	return &BitArray{
-		data: make([]byte, (size+7)>>3),
+		data: make([]byte, (size+7)>>3), // Allocate the byte array, taking into account the size of a byte (8 bits).
 	}
 }
 
+// Set modifies the value of the bit at the specified index to the given value (true or false).
 func (b *BitArray) Set(index int, value bool) {
 	if value {
-		b.data[index>>3] |= 1 << (index & 7)
+		b.data[index>>3] |= 1 << (index & 7) // Set the bit to 1.
 	} else {
-		b.data[index>>3] &^= 1 << (index & 7)
+		b.data[index>>3] &^= 1 << (index & 7) // Set the bit to 0.
 	}
 }
 
+// Get retrieves the boolean value of the bit at the specified index.
 func (b *BitArray) Get(index int) bool {
-	return (b.data[index>>3] & (1 << (index & 7))) != 0
+	return (b.data[index>>3] & (1 << (index & 7))) != 0 // Extract the bit value and convert it to a boolean.
 }
 
+// Size returns the total number of bits in the BitArray.
 func (b *BitArray) Size() int {
-	return len(b.data) << 3
+	return len(b.data) << 3 // Calculate the number of bits by multiplying the length of the byte array by 8.
 }
 
+// IntArrayToBitArray converts an array of integers into a BitArray.
 func IntArrayToBitArray(intArray []int) *BitArray {
-	n := len(intArray) * 8
-	bitArray := NewBitArray(n)
+	n := len(intArray) * 8     // Calculate the total number of bits required to store the integers.
+	bitArray := NewBitArray(n) // Create a new BitArray of the required size.
 
+	// Iterate through the integers and set their bits in the BitArray.
 	for i, value := range intArray {
 		for j := 0; j < 8; j++ {
-			bit := (value >> (7 - j)) & 1
-			bitArray.Set(i*8+j, bit == 1)
+			bit := (value >> (7 - j)) & 1 // Extract the individual bits from the integer.
+			bitArray.Set(i*8+j, bit == 1) // Set the corresponding bit in the BitArray.
 		}
 	}
 
