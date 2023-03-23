@@ -589,3 +589,47 @@ func ApproximateEntropyTest(data *BitArray, blockSize int) (float64, bool) {
 
 	return pValue, pValue > alpha
 }
+
+func NonOverlappingTemplateMatchingTest(bitArray *BitArray, template []int) (float64, bool) {
+	n := bitArray.Size()
+	numberOfBlocks := 4 // Change this according to your needs.
+	blockSize := n / numberOfBlocks
+	matchesPerBlock := make([]int, numberOfBlocks)
+	templateLen := len(template)
+	for blockIdx := 0; blockIdx < numberOfBlocks; blockIdx++ {
+		matches := 0
+		for bitIdx := 0; bitIdx <= blockSize-templateLen; bitIdx++ {
+			match := true
+			for i := 0; i < templateLen; i++ {
+				currentIndex := blockIdx*blockSize + bitIdx + i
+				if currentIndex >= n {
+					match = false
+					break
+				}
+				if bitArray.Get(currentIndex) != (template[i] == 1) {
+					match = false
+					break
+				}
+			}
+			if match {
+				matches++
+				bitIdx += templateLen - 1
+			}
+		}
+		matchesPerBlock[blockIdx] = matches
+	}
+
+	mu := (float64(blockSize) - float64(templateLen) + 1) / math.Pow(2, float64(templateLen))
+	sigma := math.Sqrt(float64(blockSize) * (1.0/math.Pow(2, float64(templateLen)) - (2*float64(templateLen)-1)/math.Pow(2, float64(2*templateLen))))
+
+	chiSquare := 0.0
+
+	for _, matches := range matchesPerBlock {
+		chiSquare += math.Pow(float64(matches)-mu, 2) / sigma / sigma
+	}
+
+	pValue := mathext.GammaIncReg(float64(numberOfBlocks)/2, chiSquare/2)
+	alpha := 0.001
+
+	return pValue, pValue > alpha
+}
