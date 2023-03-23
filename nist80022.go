@@ -3,9 +3,11 @@ package nist80022
 import (
 	"fmt"
 	"math"
-	"strconv"
+	"math/cmplx"
 	"strings"
 
+	"gonum.org/v1/gonum/dsp/fourier"
+	"gonum.org/v1/gonum/mathext"
 	"gonum.org/v1/gonum/stat/distuv"
 )
 
@@ -140,42 +142,96 @@ func IntArrayToBitArray(intArray []int) *BitArray {
 	return bitArray
 }
 
+// Perform Gaussian elimination to compute the rank of the matrix
+func matrixRank(matrix [][]int, size int) int {
+	rank := 0
+
+	for row := 0; row < size; row++ {
+		if matrix[row][row] == 0 {
+			found := false
+			for i := row + 1; i < size; i++ {
+				if matrix[i][row] != 0 {
+					matrix[row], matrix[i] = matrix[i], matrix[row]
+					found = true
+					break
+				}
+			}
+			if !found {
+				continue
+			}
+		}
+
+		rank++
+
+		for i := row + 1; i < size; i++ {
+			if matrix[i][row] != 0 {
+				for j := row; j < size; j++ {
+					matrix[i][j] = (matrix[i][j] + matrix[row][j]) % 2
+				}
+			}
+		}
+	}
+
+	return rank
+}
+
+func boolToInt(value bool) int {
+	if value {
+		return 1
+	}
+	return 0
+}
+
 // BinaryMatrixRankTest performs the binary matrix rank test on the input
 // bit string. The test divides the bit string into m x q binary matrices,
 // and calculates the rank of each matrix. It then calculates the chi-squared
 // statistic from the deviation of the observed rank sum from the expected rank
 // sum, and computes the corresponding p-value from the gamma distribution.
-// The function returns the negative base 10 logarithm of the p-value as the score.
-//
-// bits: the input bit string to test.
-// m: the number of rows in each matrix.
-// q: the number of columns in each matrix.
-func BinaryMatrixRankTest(bits string, m, q int) (float64, bool) {
-	n := len(bits)
-	numRows := n / m
-	numMatrices := n / (m * q)
-	var rankSum float64
-	for i := 0; i < numMatrices; i++ {
-		matrixStart := i * m * q
-		matrixEnd := matrixStart + m*q
-		matrixBits := bits[matrixStart:matrixEnd]
-		matrix := make([][]int, m)
-		for j := 0; j < m; j++ {
-			matrix[j] = make([]int, q)
-			for k := 0; k < q; k++ {
-				matrix[j][k] = int(matrixBits[j*q+k] - '0')
+func BinaryMatrixRankTest(bitArray *BitArray, matrixSize int) (float64, bool) {
+	n := bitArray.Size()
+	nMatrices := n / (matrixSize * matrixSize)
+	matrixSizeF := float64(matrixSize)
+
+	pFullRank := 1 - math.Pow(1-math.Pow(2, -matrixSizeF), matrixSizeF)
+	pOneLessRank := math.Pow(1-math.Pow(2, -matrixSizeF), matrixSizeF) - math.Pow(1-math.Pow(2, -matrixSizeF), matrixSizeF-1)
+	pDeficientRank := 1 - pFullRank - pOneLessRank
+
+	fullRankCount := 0
+	oneLessRankCount := 0
+	btoi := 0
+
+	for i := 0; i < nMatrices; i++ {
+		matrix := make([][]int, matrixSize)
+		for row := 0; row < matrixSize; row++ {
+			matrix[row] = make([]int, matrixSize)
+			for col := 0; col < matrixSize; col++ {
+				index := i*matrixSize*matrixSize + row*matrixSize + col
+				if bitArray.Get(index) {
+					btoi = 1
+				} else {
+					btoi = 0
+				}
+				matrix[row][col] = btoi
 			}
 		}
-		rank := calculateMatrixRank(matrix, m, q)
-		rankSum += float64(rank)
+
+		rank := matrixRank(matrix, matrixSize)
+
+		if rank == matrixSize {
+			fullRankCount++
+		} else if rank == matrixSize-1 {
+			oneLessRankCount++
+		}
 	}
-	expectedRank := float64(q*(q+1)/2) / (math.Pow(2, float64(q)))
-	expectedSum := float64(numRows) * expectedRank
-	chiSq := math.Pow(rankSum-expectedSum, 2) / expectedSum
-	gammaDist := distuv.Gamma{Alpha: float64(numRows) / 2, Beta: 0.5}
-	pval := 1 - gammaDist.CDF(chiSq/2)
-	score := -math.Log10(pval)
-	return score, score > 5
+
+	chiSquare := math.Pow(float64(fullRankCount)-float64(nMatrices)*pFullRank, 2) / (float64(nMatrices) * pFullRank)
+	chiSquare += math.Pow(float64(oneLessRankCount)-float64(nMatrices)*pOneLessRank, 2) / (float64(nMatrices) * pOneLessRank)
+	chiSquare += math.Pow(float64(nMatrices-fullRankCount-oneLessRankCount)-float64(nMatrices)*pDeficientRank, 2) / (float64(nMatrices) * pDeficientRank)
+	pValue := math.Exp(-chiSquare / 2)
+
+	alpha := 0.001
+	pass := pValue > alpha
+	return pValue, pass
 }
 
 // calculateMatrixRank computes the rank of a binary matrix using Gaussian
@@ -255,15 +311,26 @@ func CumulativeSumsTest(data *BitArray) (float64, bool) {
 // the value of a bit (either '0' or '1').
 // The function returns a boolean value indicating whether the input
 // sequence passes the test (true) or fails the test (false).
-func MonobitTest(bits string) (float64, bool) {
-	n := len(bits)
-	ones := countOnes(bits)
-	expectedOnes := float64(n) / 2.0
-	sigma := math.Sqrt(float64(n) / 4.0)
-	z := (float64(ones) - expectedOnes) / sigma
-	pval := 1 - math.Erf(math.Abs(z)/math.Sqrt2)
-	pass := pval >= 0.01
-	return pval, pass
+func MonobitTest(bitArray *BitArray) (float64, bool) {
+	sqrt2 := 1.41421356237309504880
+	n := bitArray.Size()
+	ones := 0
+
+	for i := 0; i < n; i++ {
+		if bitArray.Get(i) {
+			ones++
+		}
+	}
+
+	zeros := n - ones
+	S := ones - zeros
+	sObs := float64(S) / math.Sqrt(float64(n))
+
+	pValue := math.Erfc(math.Abs(sObs) / sqrt2)
+	alpha := 0.001
+	pass := pValue >= alpha
+
+	return pValue, pass
 }
 
 // BlockFrequencyTest performs the block frequency test on the input sequence.
@@ -271,31 +338,31 @@ func MonobitTest(bits string) (float64, bool) {
 // represents the value of a bit (either 0 or 1)
 // The function returns a boolean value indicating whether the input
 // sequence passes the test (true) or fails the test (false).
-func BlockFrequencyTest(bits string, blocksize int) (float64, bool) {
-	n := len(bits)
-	numBlocks := n / blocksize
+func BlockFrequencyTest(bitArray *BitArray, blockSize int) (float64, bool) {
+	n := bitArray.Size()
+	nBlocks := n / blockSize
 
-	// Calculate the expected proportion of ones in each block
-	expectedOnes := float64(countOnes(bits)) / float64(n)
-	expectedZeros := 1.0 - expectedOnes
+	chiSquare := 0.0
 
-	// Calculate the test statistic for each block
-	chisq := 0.0
-	for i := 0; i < numBlocks; i++ {
-		blockStart := i * blocksize
-		blockEnd := (i + 1) * blocksize
-		blockBits := bits[blockStart:blockEnd]
-		ones := countOnes(blockBits)
-		zeros := blocksize - ones
-		proportions := []float64{float64(ones) / float64(blocksize), float64(zeros) / float64(blocksize)}
-		expectedCounts := []float64{float64(blocksize) * expectedOnes, float64(blocksize) * expectedZeros}
-		chisq += chiSquared(proportions, expectedCounts)
+	for i := 0; i < nBlocks; i++ {
+		ones := 0
+
+		for j := 0; j < blockSize; j++ {
+			if bitArray.Get(i*blockSize + j) {
+				ones++
+			}
+		}
+
+		pi := float64(ones) / float64(blockSize)
+		chiSquare += (pi - 0.5) * (pi - 0.5)
 	}
 
-	// Calculate the p-value and pass/fail
-	pval := 1 - chiSquaredCDF(chisq, numBlocks*2-2)
-	pass := pval >= 0.01
-	return pval, pass
+	chiSquare *= 4.0 * float64(blockSize)
+	pValue := mathext.GammaIncReg(float64(nBlocks)/2.0, chiSquare/2.0)
+
+	alpha := 0.001
+	pass := pValue >= alpha
+	return pValue, pass
 }
 
 // RunsTest performs the runs test on the input bit string, which tests for
@@ -415,33 +482,36 @@ func LongestRunOfOnesTest(data *BitArray) (float64, bool) {
 // represents the value of a bit (either 0 or 1).
 // The function returns a boolean value indicating whether the input
 // sequence passes the test (true) or fails the test (false).
-func SpectralTest(bits string) (float64, bool) {
-	n := len(bits)
-	m := int(math.Floor(float64(n) / 2.0))
-	if m <= 0 {
-		return 0.0, false
-	}
+func SpectralTest(bitArray *BitArray) (float64, bool) {
+	n := bitArray.Size()
 
-	var s []float64 = make([]float64, m)
-	for i := 0; i < m; i++ {
-		s[i] = 0.0
-		for j := 0; j < n-i; j++ {
-			bit1, _ := strconv.Atoi(string(bits[j]))
-			bit2, _ := strconv.Atoi(string(bits[j+i]))
-			s[i] += float64((2*bit1 - 1) * (2*bit2 - 1))
+	// Prepare data for the Fourier transform
+	data := make([]float64, n)
+	for i := 0; i < n; i++ {
+		if bitArray.Get(i) {
+			data[i] = 1.0
+		} else {
+			data[i] = -1.0
 		}
 	}
 
-	var tau float64
-	tau = 0.0
-	for i := 1; i < m; i++ {
-		tau += s[i] / s[0]
+	// Perform the Fourier transform
+	fft := fourier.NewFFT(len(data))
+	cdata := fft.Coefficients(nil, data)
+
+	// Compute the magnitudes of the first n/2 complex coefficients
+	magnitudes := make([]float64, n/2)
+	for i := 0; i < n/2; i++ {
+		magnitudes[i] = cmplx.Abs(cdata[i])
 	}
-	tau = 2.0 * tau
 
-	var pval float64 = math.Erfc(math.Abs(tau) / math.Sqrt(2.0))
+	// Calculate the test statistic (T) and the p-value
+	T := math.Sqrt(float64(n)-1.0) * math.Sqrt(2.0) / 3.0
+	pValue := math.Erfc(T / (math.Sqrt(2.0) * math.Sqrt(float64(n)/4.0)))
 
-	return pval, pval > 0.01
+	alpha := 0.001
+	pass := pValue >= alpha
+	return pValue, pass
 }
 
 // UniversalStatisticalTest performs Maurer's "universal statistical" test on the input sequence.
