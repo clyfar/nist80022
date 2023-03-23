@@ -175,13 +175,6 @@ func matrixRank(matrix [][]int, size int) int {
 	return rank
 }
 
-func boolToInt(value bool) int {
-	if value {
-		return 1
-	}
-	return 0
-}
-
 // BinaryMatrixRankTest performs the binary matrix rank test on the input
 // bit string. The test divides the bit string into m x q binary matrices,
 // and calculates the rank of each matrix. It then calculates the chi-squared
@@ -232,47 +225,6 @@ func BinaryMatrixRankTest(bitArray *BitArray, matrixSize int) (float64, bool) {
 	alpha := 0.001
 	pass := pValue > alpha
 	return pValue, pass
-}
-
-// calculateMatrixRank computes the rank of a binary matrix using Gaussian
-// elimination with partial pivoting.
-//
-// matrix: the binary matrix to calculate the rank of.
-// m: the number of rows in the matrix.
-// q: the number of columns in the matrix.
-func calculateMatrixRank(matrix [][]int, m, q int) int {
-	rank := 0
-	for j := 0; j < q; j++ {
-		// Find the row with the largest absolute value in column j
-		maxRowIndex := j
-		for i := j + 1; i < m; i++ {
-			if math.Abs(float64(matrix[i][j])) > math.Abs(float64(matrix[maxRowIndex][j])) {
-				maxRowIndex = i
-			}
-		}
-
-		// Swap rows to put the maximum element at position (j,j)
-		if maxRowIndex != j {
-			matrix[j], matrix[maxRowIndex] = matrix[maxRowIndex], matrix[j]
-		}
-
-		// Check if the element at position (j,j) is non-zero
-		if matrix[j][j] == 0 {
-			continue
-		}
-
-		// Zero out all elements in column j below the diagonal element
-		for i := j + 1; i < m; i++ {
-			if matrix[i][j] != 0 {
-				for k := j + 1; k < q; k++ {
-					matrix[i][k] = (matrix[i][k] + matrix[j][k]) % 2
-				}
-			}
-		}
-
-		rank++
-	}
-	return rank
 }
 
 // CumulativeSumsTest or the NIST cumulative sums test is a statistical test to determine if the number of ones and zeros in a binary sequence are evenly distributed.
