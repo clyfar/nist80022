@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"math/cmplx"
+	"strconv"
 	"strings"
 
 	"gonum.org/v1/gonum/dsp/fourier"
@@ -124,6 +125,23 @@ func (b *BitArray) Get(index int) bool {
 // Size returns the total number of bits in the BitArray.
 func (b *BitArray) Size() int {
 	return len(b.data) << 3 // Calculate the number of bits by multiplying the length of the byte array by 8.
+}
+
+func (ba *BitArray) GetBitsString(startIndex, length int) string {
+	endIndex := startIndex + length
+	if endIndex > ba.Size() {
+		endIndex = ba.Size()
+	}
+
+	var sb strings.Builder
+	for i := startIndex; i < endIndex; i++ {
+		if ba.Get(i) {
+			sb.WriteRune('1')
+		} else {
+			sb.WriteRune('0')
+		}
+	}
+	return sb.String()
 }
 
 // IntArrayToBitArray converts an array of integers into a BitArray.
@@ -636,6 +654,7 @@ func NonOverlappingTemplateMatchingTest(bitArray *BitArray, template []int) (flo
 
 // LFSR implementation for use in the LinearComplexityTest. This is used to
 // validate pseudo-random numbers.
+// BerlekampMasseyAlgorithm computes the linear complexity of a binary sequence.
 func berlekampMasseyAlgorithm(s []int) int {
 	n := len(s)
 	N := 0
@@ -657,7 +676,6 @@ func berlekampMasseyAlgorithm(s []int) int {
 			d[N] ^= c[i] & s[N-i]
 		}
 		if d[N] != 0 {
-			t = make([]int, n)
 			copy(t, c)
 			for i := 0; i < n-N+m; i++ {
 				c[N-m+i] ^= b & d[i]
@@ -672,41 +690,101 @@ func berlekampMasseyAlgorithm(s []int) int {
 	return L
 }
 
+// LinearComplexityTest performs the Linear Complexity Test on a bit sequence.
 func LinearComplexityTest(bitArray *BitArray, blockSize int) (float64, bool) {
 	n := bitArray.Size()
 	if n < blockSize {
-		fmt.Println(n, blockSize)
 		return 0, false
 	}
 
-	bt := 0
 	numberOfBlocks := n / blockSize
-	pi := make([]float64, 7)
-	pi[0], pi[1], pi[2], pi[3], pi[4], pi[5], pi[6] = 0.01047, 0.03125, 0.12500, 0.50000, 0.25000, 0.06250, 0.02000
+	pi := []float64{0.01047, 0.03125, 0.12500, 0.50000, 0.25000, 0.06250, 0.02000}
 	v := make([]int, 7)
 	block := make([]int, blockSize)
 
 	for k := 0; k < numberOfBlocks; k++ {
 		for i := 0; i < blockSize; i++ {
 			if bitArray.Get(k*blockSize + i) {
-				bt = 1
+				block[i] = 1
 			} else {
-				bt = 0
+				block[i] = 0
 			}
-			block[i] = bt
 		}
+
 		l := berlekampMasseyAlgorithm(block)
 		lc := float64(blockSize)/2.0 - float64(l) + 1.0
-		idx := int(math.Floor(lc/3.0 + 0.5))
+		idx := 0
+		if lc <= -9.0 {
+			idx = 0
+		} else if lc <= -1.0 {
+			idx = 1
+		} else if lc <= 9.0 {
+			idx = 2
+		} else if lc <= 25.0 {
+			idx = 3
+		} else if lc <= 49.0 {
+			idx = 4
+		} else if lc <= 81.0 {
+			idx = 5
+		} else {
+			idx = 6
+		}
+
 		if idx >= 0 && idx < len(v) {
 			v[idx]++
 		}
 	}
+
 	chisq := 0.0
 	for i := 0; i < 7; i++ {
 		chisq += math.Pow(float64(v[i])-float64(numberOfBlocks)*pi[i], 2) / (float64(numberOfBlocks) * pi[i])
 	}
 
 	pValue := mathext.GammaIncReg(3.0, chisq/2.0)
-	return pValue, pValue >= 0.01
+	alpha := 0.001
+
+	return pValue, pValue >= alpha
+}
+
+func SerialTest(bitArray *BitArray, m int) ([]float64, bool) {
+	n := bitArray.Size()
+
+	numPatterns := 1 << uint(m)
+	patternCounts := make([]int, numPatterns)
+
+	for i := 0; i < n-m+1; i++ {
+		pattern := bitArray.GetBitsString(i, m)
+		patternIndex, _ := strconv.ParseInt(pattern, 2, 64)
+		patternCounts[patternIndex]++
+	}
+
+	phi := make([]float64, m+1)
+	for i := 1; i <= m; i++ {
+		numPatternsForI := 1 << uint(i)
+		sum := 0.0
+
+		for j := 0; j < numPatternsForI; j++ {
+			sum += math.Pow(float64(patternCounts[j]), 2)
+		}
+
+		phi[i] = (float64(numPatternsForI)/float64(n))*sum - float64(n)
+	}
+
+	pValues := make([]float64, m)
+	pass := make([]bool, m)
+	for i := 1; i <= m; i++ {
+		pValues[i-1] = math.Exp(-phi[i] / 2)
+		pass[i-1] = pValues[i-1] >= 0.01
+	}
+	minPValue := 1.0
+
+	for _, p := range pValues {
+		if p < minPValue {
+			minPValue = p
+		}
+	}
+
+	alpha := 0.001
+
+	return pValues, minPValue > alpha
 }
