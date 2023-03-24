@@ -633,3 +633,80 @@ func NonOverlappingTemplateMatchingTest(bitArray *BitArray, template []int) (flo
 
 	return pValue, pValue > alpha
 }
+
+// LFSR implementation for use in the LinearComplexityTest. This is used to
+// validate pseudo-random numbers.
+func berlekampMasseyAlgorithm(s []int) int {
+	n := len(s)
+	N := 0
+	L := 0
+	m := -1
+	b := 0
+	c := make([]int, n)
+	d := make([]int, n)
+	t := make([]int, n)
+	c[0], b, N = 1, 1, 0
+
+	for i := 1; i < n; i++ {
+		c[i] = 0
+	}
+
+	for ; N < n; N++ {
+		d[N] = s[N]
+		for i := 1; i <= L; i++ {
+			d[N] ^= c[i] & s[N-i]
+		}
+		if d[N] != 0 {
+			t = make([]int, n)
+			copy(t, c)
+			for i := 0; i < n-N+m; i++ {
+				c[N-m+i] ^= b & d[i]
+			}
+			if L <= N/2 {
+				L = N + 1 - L
+				m = N
+				b = d[N]
+			}
+		}
+	}
+	return L
+}
+
+func LinearComplexityTest(bitArray *BitArray, blockSize int) (float64, bool) {
+	n := bitArray.Size()
+	if n < blockSize {
+		fmt.Println(n, blockSize)
+		return 0, false
+	}
+
+	bt := 0
+	numberOfBlocks := n / blockSize
+	pi := make([]float64, 7)
+	pi[0], pi[1], pi[2], pi[3], pi[4], pi[5], pi[6] = 0.01047, 0.03125, 0.12500, 0.50000, 0.25000, 0.06250, 0.02000
+	v := make([]int, 7)
+	block := make([]int, blockSize)
+
+	for k := 0; k < numberOfBlocks; k++ {
+		for i := 0; i < blockSize; i++ {
+			if bitArray.Get(k*blockSize + i) {
+				bt = 1
+			} else {
+				bt = 0
+			}
+			block[i] = bt
+		}
+		l := berlekampMasseyAlgorithm(block)
+		lc := float64(blockSize)/2.0 - float64(l) + 1.0
+		idx := int(math.Floor(lc/3.0 + 0.5))
+		if idx >= 0 && idx < len(v) {
+			v[idx]++
+		}
+	}
+	chisq := 0.0
+	for i := 0; i < 7; i++ {
+		chisq += math.Pow(float64(v[i])-float64(numberOfBlocks)*pi[i], 2) / (float64(numberOfBlocks) * pi[i])
+	}
+
+	pValue := mathext.GammaIncReg(3.0, chisq/2.0)
+	return pValue, pValue >= 0.01
+}
