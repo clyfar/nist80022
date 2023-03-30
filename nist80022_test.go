@@ -331,3 +331,230 @@ func TestGetBlock(t *testing.T) {
 		})
 	}
 }
+
+func TestNewBitArray(t *testing.T) {
+	type test struct {
+		name string
+		size int
+		want *BitArray
+	}
+
+	tests := []test{
+		{
+			name: "Zero input",
+			size: 0,
+			want: &BitArray{
+				data: []byte{},
+			},
+		},
+		{
+			name: "Double digit input",
+			size: 17,
+			want: &BitArray{
+				data: []byte{0, 0, 0},
+			},
+		},
+		{
+			name: "Triple digit input",
+			size: 121,
+			want: &BitArray{
+				data: []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := NewBitArray(tc.size)
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Errorf("NewBitArray(%d) = %v, want %v", tc.size, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestBitArray_Set(t *testing.T) {
+	type input struct {
+		index int
+		value bool
+	}
+
+	type test struct {
+		name   string
+		size   int
+		inputs []input
+	}
+
+	tests := []test{
+		{
+			name: "16 bit Set",
+			size: 16,
+			inputs: []input{
+				{0, true},
+				{0, false},
+				{14, true},
+				{14, false},
+			},
+		},
+		{
+			name: "32 bit Set",
+			size: 32,
+			inputs: []input{
+				{0, true},
+				{0, false},
+				{14, true},
+				{14, false},
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ba := NewBitArray(tc.size)
+			for _, input := range tc.inputs {
+				ba.Set(input.index, input.value)
+				out := ba.Get(input.index)
+				if out != input.value {
+					t.Errorf("Bit %d has wrong value: expected %v, got %v", input.index, input.value, !input.value)
+				}
+			}
+		})
+	}
+}
+
+func TestBitArray_Get(t *testing.T) {
+
+	type test struct {
+		name   string
+		inputs []int
+		want   *BitArray
+	}
+
+	tests := []test{
+		{
+			name: "5 number length Get",
+			inputs: []int{
+				1, 1, 0, 1, 1,
+			},
+			want: &BitArray{
+				data: []byte{27},
+			},
+		},
+		{
+			name: "16 number length Get",
+			inputs: []int{
+				1, 0, 1, 2, 1, 0, 1, 2, 1, 0, 1, 2, 1, 0, 1, 2,
+			},
+			want: &BitArray{
+				data: []byte{85, 85},
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ba := NewBitArray(len(tc.inputs))
+			for i, input := range tc.inputs {
+				ba.Set(i, input == 1)
+			}
+			if !reflect.DeepEqual(ba, tc.want) {
+				t.Errorf("BitArray.Get() = %v, want %v", ba, tc.want)
+			}
+		})
+	}
+}
+
+func TestBitArray_Size(t *testing.T) {
+	type test struct {
+		name  string
+		input int
+		want  int
+	}
+
+	tests := []test{
+		{
+			name:  "with a double digit input",
+			input: 17,
+			want:  24,
+		},
+		{
+			name:  "with a triple digit input",
+			input: 121,
+			want:  128,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ba := NewBitArray(tc.input)
+			got := ba.Size()
+			if got != tc.want {
+				t.Errorf("BitArray.Size() = %d, want %d", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestIntArrayToBitArray(t *testing.T) {
+	type test struct {
+		name  string
+		input []int
+		want  *BitArray
+	}
+
+	tests := []test{
+		{
+			name:  "with a single digit input",
+			input: []int{1},
+			want: &BitArray{
+				data: []byte{128},
+			},
+		},
+		{
+			name:  "with a double digit input",
+			input: []int{1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1},
+			want: &BitArray{
+				data: []byte{128, 128, 0, 128, 128, 0, 128, 128, 0, 128, 128, 0, 128, 128, 0, 128},
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := IntArrayToBitArray(tc.input)
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Errorf("IntArrayToBitArray() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestMatrixRank(t *testing.T) {
+	type test struct {
+		name   string
+		matrix [][]int
+		size   int
+		want   int
+	}
+
+	tests := []test{
+		{
+			name: "with a 2x2 matrix",
+			matrix: [][]int{
+				{1, 0},
+				{0, 1},
+			},
+			size: 2,
+			want: 2,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := matrixRank(tc.matrix, tc.size)
+			if got != tc.want {
+				t.Errorf("matrixRank() = %d, want %d", got, tc.want)
+			}
+		})
+	}
+}
